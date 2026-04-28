@@ -24,7 +24,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "OutfitAITemp",
+      withModuleName: "OutfitAI",
       in: window,
       launchOptions: launchOptions
     )
