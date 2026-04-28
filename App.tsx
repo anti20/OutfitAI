@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { enableScreens } from 'react-native-screens';
 
 import { HomeScreen } from './src/screens/HomeScreen';
+import { PhotoPreviewScreen } from './src/screens/PhotoPreviewScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { getOpenAIApiKey } from './src/storage/apiKeyStorage';
 import type { RootStackParamList } from './src/types/navigation';
@@ -57,6 +58,11 @@ export default function App() {
               name="Home"
               component={HomeScreen}
               options={{ title: 'OutfitAI' }}
+            />
+            <Stack.Screen
+              name="PhotoPreview"
+              component={PhotoPreviewScreen}
+              options={{ title: 'Preview' }}
             />
             <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
               {(props) => (
