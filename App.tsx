@@ -1,106 +1,112 @@
-import * as React from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { enableScreens } from 'react-native-screens';
-
-import { HomeScreen } from './src/screens/HomeScreen';
-import { PhotoPreviewScreen } from './src/screens/PhotoPreviewScreen';
-import { SettingsScreen } from './src/screens/SettingsScreen';
-import { getOpenAIApiKey } from './src/storage/apiKeyStorage';
-import type { RootStackParamList } from './src/types/navigation';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {ActivityIndicator, StatusBar, StyleSheet, View} from 'react-native';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {enableScreens} from 'react-native-screens';
+import HomeScreen from './src/screens/HomeScreen';
+import PhotoPreviewScreen from './src/screens/PhotoPreviewScreen';
+import ResultScreen from './src/screens/ResultScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import {getOpenAIKey} from './src/storage/openAIKeyStorage';
+import {RootStackParamList} from './src/types/navigation';
 
 enableScreens();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App() {
-  const [booting, setBooting] = React.useState(true);
-  const [hasKey, setHasKey] = React.useState(false);
+function App() {
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
-  React.useEffect(() => {
-    let active = true;
-    (async () => {
-      const key = await getOpenAIApiKey();
-      if (!active) return;
-      setHasKey(Boolean(key));
-      setBooting(false);
-    })();
-    return () => {
-      active = false;
+  useEffect(() => {
+    const bootstrap = async () => {
+      const savedKey = await getOpenAIKey();
+      setHasApiKey(Boolean(savedKey));
     };
+
+    bootstrap();
   }, []);
 
-  if (booting) {
+  const handleSavedKey = useCallback(() => {
+    setHasApiKey(true);
+  }, []);
+
+  const handleClearedKey = useCallback(() => {
+    setHasApiKey(false);
+  }, []);
+
+  const stackKey = useMemo(
+    () => (hasApiKey ? 'root-home' : 'root-settings'),
+    [hasApiKey],
+  );
+  const navigationKey = useMemo(
+    () => (hasApiKey ? 'nav-has-key' : 'nav-no-key'),
+    [hasApiKey],
+  );
+
+  if (hasApiKey === null) {
     return (
-      <View style={styles.splash}>
-        <ActivityIndicator color="#0A84FF" />
-        <StatusBar style="light" />
-      </View>
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor="#0B1020" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#7C3AED" />
+        </View>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        key={hasKey ? 'has-key' : 'no-key'}
-        initialRouteName={hasKey ? 'Home' : 'Settings'}
-        screenOptions={{
-          headerStyle: { backgroundColor: '#0B0B0F' },
-          headerTintColor: '#FFFFFF',
-          contentStyle: { backgroundColor: '#0B0B0F' },
-        }}
-      >
-        {hasKey ? (
-          <>
-            <Stack.Screen
-              name="Home"
-              component={HomeScreen}
-              options={{ title: 'OutfitAI' }}
-            />
-            <Stack.Screen
-              name="PhotoPreview"
-              component={PhotoPreviewScreen}
-              options={{ title: 'Preview' }}
-            />
-            <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
-              {(props) => (
+    <SafeAreaProvider>
+      <StatusBar barStyle="light-content" backgroundColor="#0B1020" />
+      <NavigationContainer key={navigationKey}>
+        <Stack.Navigator key={stackKey} screenOptions={{headerShown: false}}>
+          {hasApiKey ? (
+            <>
+              <Stack.Screen name="Home">
+                {props => <HomeScreen {...props} />}
+              </Stack.Screen>
+              <Stack.Screen name="Settings">
+                {props => (
+                  <SettingsScreen
+                    {...props}
+                    isRequiredSetup={false}
+                    onKeySaved={handleSavedKey}
+                    onKeyCleared={handleClearedKey}
+                  />
+                )}
+              </Stack.Screen>
+              <Stack.Screen name="PhotoPreview">
+                {props => <PhotoPreviewScreen {...props} />}
+              </Stack.Screen>
+              <Stack.Screen name="Result">
+                {props => <ResultScreen {...props} />}
+              </Stack.Screen>
+            </>
+          ) : (
+            <Stack.Screen name="Settings">
+              {props => (
                 <SettingsScreen
                   {...props}
-                  hasApiKey={hasKey}
-                  onKeySaved={() => setHasKey(true)}
-                  onKeyCleared={() => setHasKey(false)}
+                  isRequiredSetup
+                  onKeySaved={handleSavedKey}
+                  onKeyCleared={handleClearedKey}
                 />
               )}
             </Stack.Screen>
-          </>
-        ) : (
-          <Stack.Screen
-            name="Settings"
-            options={{ title: 'Settings', headerBackVisible: false }}
-          >
-            {(props) => (
-              <SettingsScreen
-                {...props}
-                hasApiKey={hasKey}
-                onKeySaved={() => setHasKey(true)}
-                onKeyCleared={() => setHasKey(false)}
-              />
-            )}
-          </Stack.Screen>
-        )}
-      </Stack.Navigator>
-      <StatusBar style="light" />
-    </NavigationContainer>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  splash: {
+  loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: '#0B1020',
     alignItems: 'center',
-    backgroundColor: '#0B0B0F',
+    justifyContent: 'center',
   },
 });
+
+export default App;

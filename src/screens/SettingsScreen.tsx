@@ -1,216 +1,182 @@
-import * as React from 'react';
+import React, {useEffect, useState} from 'react';
+import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
+import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import Button from '../components/Button';
+import {validateOpenAIKey} from '../services/openai';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-
-import { PrimaryButton } from '../components/PrimaryButton';
-import { validateOpenAIKey } from '../services/openai';
-import { clearOpenAIApiKey, getOpenAIApiKey, setOpenAIApiKey } from '../storage/apiKeyStorage';
-import type { RootStackParamList } from '../types/navigation';
+  clearOpenAIKey,
+  getOpenAIKey,
+  saveOpenAIKey,
+} from '../storage/openAIKeyStorage';
+import {RootStackParamList} from '../types/navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'> & {
-  hasApiKey: boolean;
+  isRequiredSetup: boolean;
   onKeySaved: () => void;
   onKeyCleared: () => void;
 };
 
-export function SettingsScreen({ navigation, hasApiKey, onKeySaved, onKeyCleared }: Props) {
-  const [apiKey, setApiKey] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [messageType, setMessageType] = React.useState<'error' | 'success' | null>(null);
-  const canGoBack = navigation.canGoBack();
+function SettingsScreen({isRequiredSetup, navigation, onKeySaved, onKeyCleared}: Props) {
+  const [apiKey, setApiKey] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
+  const [statusText, setStatusText] = useState('No key saved');
+  const [errorText, setErrorText] = useState('');
 
-  React.useEffect(() => {
-    let active = true;
-    (async () => {
-      const existing = await getOpenAIApiKey();
-      if (!active) return;
-      setApiKey(existing ?? '');
-    })();
-    return () => {
-      active = false;
+  useEffect(() => {
+    const loadStatus = async () => {
+      const existingKey = await getOpenAIKey();
+      setStatusText(existingKey ? 'Key saved' : 'No key saved');
+      setApiKey(existingKey ?? '');
     };
+
+    loadStatus();
   }, []);
 
-  async function handleSave() {
-    const trimmed = apiKey.trim();
-    if (!trimmed) {
-      setMessageType('error');
-      setMessage('Please enter an API key');
+  const handleValidateAndSave = async () => {
+    setIsValidating(true);
+    setErrorText('');
+
+    const validation = await validateOpenAIKey(apiKey);
+
+    if (!validation.valid) {
+      setStatusText('No key saved');
+      setErrorText(validation.error ?? 'Validation failed.');
+      setIsValidating(false);
       return;
     }
 
-    try {
-      setBusy(true);
-      setMessage(null);
-      setMessageType(null);
+    await saveOpenAIKey(apiKey.trim());
+    setStatusText('Key saved');
+    setIsValidating(false);
+    onKeySaved();
 
-      const validation = await validateOpenAIKey(trimmed);
-      if (!validation.ok) {
-        setMessageType('error');
-        setMessage(validation.error);
-        return;
-      }
-
-      await setOpenAIApiKey(trimmed);
-      setApiKey(trimmed);
-      onKeySaved();
-      setMessageType('success');
-      setMessage('Key validated and saved');
-    } catch (_e) {
-      setMessageType('error');
-      setMessage('Could not save the API key. Please try again.');
-    } finally {
-      setBusy(false);
+    if (!isRequiredSetup && navigation.canGoBack()) {
+      navigation.goBack();
     }
-  }
+  };
 
-  async function handleClear() {
-    try {
-      setBusy(true);
-      await clearOpenAIApiKey();
-      setApiKey('');
-      onKeyCleared();
-      setMessageType(null);
-      setMessage(null);
-      Alert.alert('Cleared', 'Saved API key removed.');
-    } catch (e) {
-      Alert.alert('Clear failed', 'Could not clear the API key. Please try again.');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const handleClear = async () => {
+    await clearOpenAIKey();
+    setApiKey('');
+    setStatusText('No key saved');
+    setErrorText('');
+    onKeyCleared();
+  };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.status}>
-          Status: {hasApiKey ? 'Key saved' : 'No key saved'}
-        </Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Settings</Text>
+          {!isRequiredSetup ? (
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.cancelButton}
+              hitSlop={8}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Text style={styles.description}>Add your OpenAI API key</Text>
 
-        <Text style={styles.label}>OpenAI API key</Text>
         <TextInput
           value={apiKey}
-          onChangeText={(value) => {
-            setApiKey(value);
-            if (message) {
-              setMessage(null);
-              setMessageType(null);
-            }
-          }}
+          onChangeText={setApiKey}
           placeholder="sk-..."
-          placeholderTextColor="rgba(255,255,255,0.35)"
+          placeholderTextColor="#6B7280"
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
-          editable={!busy}
           style={styles.input}
         />
 
-        {message ? (
-          <Text style={[styles.message, messageType === 'error' ? styles.error : styles.success]}>
-            {message}
-          </Text>
-        ) : null}
+        <Text style={styles.status}>{statusText}</Text>
+        {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
 
         <View style={styles.actions}>
-          <PrimaryButton
-            label={busy ? 'Validating…' : 'Validate & Save'}
-            onPress={handleSave}
-            disabled={busy}
-            style={styles.action}
+          <Button
+            label="Validate & Save"
+            onPress={handleValidateAndSave}
+            loading={isValidating}
+            disabled={!apiKey.trim()}
           />
-          <PrimaryButton
-            label="Clear"
-            onPress={handleClear}
-            disabled={busy}
-            variant="danger"
-            style={styles.action}
-          />
+          <View style={styles.actionGap} />
+          <Button label="Clear" onPress={handleClear} variant="secondary" />
         </View>
-
-        {canGoBack ? (
-          <PrimaryButton
-            label="Back"
-            onPress={() => navigation.goBack()}
-            disabled={busy}
-            variant="secondary"
-          />
-        ) : null}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    backgroundColor: '#0B1020',
+    paddingHorizontal: 20,
     justifyContent: 'center',
-    backgroundColor: '#0B0B0F',
   },
   card: {
+    backgroundColor: '#111827',
     borderRadius: 16,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: '#1F2937',
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: '700',
-    marginBottom: 8,
+    color: '#F9FAFB',
   },
-  status: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 14,
-    marginBottom: 16,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  label: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 14,
-    marginBottom: 8,
+  cancelButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  cancelButtonText: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  description: {
+    marginTop: 8,
+    fontSize: 16,
+    color: '#D1D5DB',
   },
   input: {
-    height: 48,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#374151',
     borderRadius: 12,
     paddingHorizontal: 12,
-    color: '#FFFFFF',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    marginBottom: 14,
+    paddingVertical: 12,
+    color: '#F9FAFB',
+    backgroundColor: '#0F172A',
+    fontSize: 16,
   },
-  message: {
-    fontSize: 13,
-    marginBottom: 12,
+  status: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#9CA3AF',
   },
   error: {
-    color: '#F87171',
-  },
-  success: {
-    color: '#4ADE80',
+    marginTop: 6,
+    color: '#FCA5A5',
+    fontSize: 14,
   },
   actions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    marginTop: 20,
   },
-  action: {
-    flex: 1,
+  actionGap: {
+    height: 12,
   },
 });
 
+export default SettingsScreen;

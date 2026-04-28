@@ -1,74 +1,90 @@
-import * as React from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-
-import { PrimaryButton } from '../components/PrimaryButton';
-import type { RootStackParamList } from '../types/navigation';
+import React from 'react';
+import {Alert, Pressable, StyleSheet, Text, View} from 'react-native';
+import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {
+  launchCamera,
+  launchImageLibrary,
+  ImagePickerResponse,
+} from 'react-native-image-picker';
+import Button from '../components/Button';
+import {RootStackParamList} from '../types/navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-export function HomeScreen({ navigation }: Props) {
-  async function handleTakePhoto() {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow camera access to take a photo.');
+function HomeScreen({navigation}: Props) {
+  const handleImagePickerResult = (response: ImagePickerResponse) => {
+    if (response.didCancel) {
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-      allowsEditing: true,
-      aspect: [3, 4],
-    });
-
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    navigation.navigate('PhotoPreview', { imageUri: result.assets[0].uri });
-  }
-
-  async function handleChooseFromLibrary() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow photo library access to choose an image.');
+    if (response.errorCode) {
+      Alert.alert(
+        'Unable to open image picker',
+        response.errorMessage ?? 'Please try again.',
+      );
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+    const selectedAsset = response.assets?.[0];
+    const imageUri = selectedAsset?.uri;
+
+    if (!imageUri) {
+      Alert.alert('No image selected', 'Please choose a valid photo and try again.');
+      return;
+    }
+
+    navigation.navigate('PhotoPreview', {
+      imageUri,
+      fileName: selectedAsset.fileName,
+      type: selectedAsset.type,
+    });
+  };
+
+  const handleTakePhoto = async () => {
+    const response = await launchCamera({
+      mediaType: 'photo',
       quality: 0.8,
-      allowsEditing: false,
-      selectionLimit: 1,
+      includeBase64: false,
     });
 
-    if (result.canceled || !result.assets?.[0]?.uri) return;
-    navigation.navigate('PhotoPreview', { imageUri: result.assets[0].uri });
-  }
+    handleImagePickerResult(response);
+  };
+
+  const handleChooseFromLibrary = async () => {
+    const response = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.8,
+      includeBase64: false,
+    });
+
+    handleImagePickerResult(response);
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>OutfitAI is ready</Text>
-      <Text style={styles.subtitle}>
-        API key is saved. Camera and outfit analysis will come next.
-      </Text>
+      <View style={styles.topBar}>
+        <Pressable
+          style={styles.settingsPill}
+          onPress={() => navigation.navigate('Settings')}
+          hitSlop={8}>
+          <Text style={styles.settingsPillText}>Settings</Text>
+        </Pressable>
+      </View>
 
-      <PrimaryButton
-        label="Take photo"
-        onPress={handleTakePhoto}
-        style={styles.button}
-      />
-      <PrimaryButton
-        label="Choose from library"
-        onPress={handleChooseFromLibrary}
-        variant="secondary"
-        style={styles.button}
-      />
-      <PrimaryButton
-        label="Settings"
-        onPress={() => navigation.navigate('Settings')}
-        variant="secondary"
-        style={styles.settingsButton}
-      />
+      <View style={styles.card}>
+        <Text style={styles.title}>OutfitAI</Text>
+        <Text style={styles.subtitle}>OutfitAI is ready</Text>
+
+        <View style={styles.actions}>
+          <Button label="Take photo" onPress={handleTakePhoto} />
+          <View style={styles.actionGap} />
+          <Button
+            label="Choose from library"
+            onPress={handleChooseFromLibrary}
+            variant="secondary"
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -76,27 +92,54 @@ export function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0B1020',
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    justifyContent: 'flex-start',
+  },
+  topBar: {
+    alignItems: 'flex-end',
+    marginBottom: 16,
+  },
+  settingsPill: {
+    backgroundColor: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  settingsPillText: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
     padding: 20,
-    justifyContent: 'center',
-    backgroundColor: '#0B0B0F',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginTop: 12,
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: '700',
-    marginBottom: 8,
+    color: '#F9FAFB',
+    textAlign: 'center',
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 15,
-    marginBottom: 20,
-    lineHeight: 20,
+    marginTop: 12,
+    fontSize: 16,
+    color: '#D1D5DB',
+    textAlign: 'center',
   },
-  button: {
-    marginTop: 10,
+  actions: {
+    marginTop: 28,
   },
-  settingsButton: {
-    marginTop: 18,
+  actionGap: {
+    height: 12,
   },
 });
 
+export default HomeScreen;
