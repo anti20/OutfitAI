@@ -1,16 +1,46 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {Alert, Image, StyleSheet, Text, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import Button from '../components/Button';
+import {analyzeOutfitImage} from '../services/openai';
 import {RootStackParamList} from '../types/navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PhotoPreview'>;
 
 function PhotoPreviewScreen({navigation, route}: Props) {
   const {imageUri, fileName, type} = route.params;
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const handleAnalyzePlaceholder = () => {
-    Alert.alert('Analysis coming next');
+  const handleAnalyzeOutfit = async () => {
+    setIsAnalyzing(true);
+    try {
+      const analysis = await analyzeOutfitImage({
+        imageUri,
+        mimeType: type,
+      });
+
+      navigation.navigate('Result', {analysis});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error';
+
+      if (message === 'MISSING_API_KEY') {
+        Alert.alert(
+          'Missing API key',
+          'Please add your OpenAI API key in Settings before analyzing.',
+        );
+      } else if (message === 'IMAGE_READ_FAILED') {
+        Alert.alert('Could not read image', 'Please choose another photo and try again.');
+      } else if (message === 'INVALID_JSON') {
+        Alert.alert(
+          'Unexpected response',
+          'Could not parse analysis result. Please try again.',
+        );
+      } else {
+        Alert.alert('Analysis failed', message);
+      }
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -29,9 +59,15 @@ function PhotoPreviewScreen({navigation, route}: Props) {
             label="Retake / Choose another"
             onPress={() => navigation.goBack()}
             variant="secondary"
+            disabled={isAnalyzing}
           />
           <View style={styles.actionGap} />
-          <Button label="Analyze outfit" onPress={handleAnalyzePlaceholder} />
+          <Button
+            label="Analyze outfit"
+            onPress={handleAnalyzeOutfit}
+            loading={isAnalyzing}
+            disabled={isAnalyzing}
+          />
         </View>
       </View>
     </View>

@@ -6,6 +6,7 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {enableScreens} from 'react-native-screens';
 import HomeScreen from './src/screens/HomeScreen';
 import PhotoPreviewScreen from './src/screens/PhotoPreviewScreen';
+import ResultScreen from './src/screens/ResultScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import {getOpenAIKey} from './src/storage/openAIKeyStorage';
 import {RootStackParamList} from './src/types/navigation';
@@ -76,6 +77,9 @@ function App() {
               </Stack.Screen>
               <Stack.Screen name="PhotoPreview">
                 {props => <PhotoPreviewScreen {...props} />}
+              </Stack.Screen>
+              <Stack.Screen name="Result">
+                {props => <ResultScreen {...props} />}
               </Stack.Screen>
             </>
           ) : (

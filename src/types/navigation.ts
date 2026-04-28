@@ -1,3 +1,11 @@
+export type OutfitAnalysisResult = {
+  verdict: 'yes' | 'mostly' | 'no';
+  colorMatching: 'good' | 'okay' | 'poor';
+  styleConsistency: 'good' | 'okay' | 'poor';
+  explanation: string;
+  suggestions: string[];
+};
+
 export type RootStackParamList = {
   Home: undefined;
   Settings: undefined;
@@ -5,5 +13,8 @@ export type RootStackParamList = {
     imageUri: string;
     fileName?: string;
     type?: string;
+  };
+  Result: {
+    analysis: OutfitAnalysisResult;
   };
 };
