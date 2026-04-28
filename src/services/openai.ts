@@ -1,6 +1,6 @@
 import RNFS from 'react-native-fs';
-import {getOpenAIKey} from '../storage/openAIKeyStorage';
-import {OutfitAnalysisResult} from '../types/navigation';
+import { getOpenAIKey } from '../storage/openAIKeyStorage';
+import { OutfitAnalysisResult } from '../types/navigation';
 
 type ValidationResult = {
   valid: boolean;
@@ -16,25 +16,37 @@ type AnalyzeOutfitParams = {
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_MODEL = 'gpt-4.1';
 
-const OUTFIT_STYLIST_INSTRUCTIONS = `You are a fashion stylist.
+const OUTFIT_STYLIST_INSTRUCTIONS = `You are a practical fashion stylist.
 
 Analyze the outfit in the image.
 
-Tasks:
-- Determine if the outfit works well together (yes, mostly, or no)
-- Evaluate:
-  - color matching
-  - style consistency, e.g. formal vs casual
-- Give a short explanation, max 3 sentences
-- Suggest 1-2 improvements only if needed
+Be honest but not rude. Do not over-compliment. If the outfit does not work, say so clearly.
 
-Tone:
-- Be direct and practical
-- Do not be harsh
-- Do not be overly critical
-- Do not be verbose
-- Avoid body comments
-- Focus only on clothes, colors, and styling`;
+Evaluate:
+- color matching
+- style consistency, especially formal vs casual mismatch
+- whether individual pieces belong together
+- shoes, outerwear, pants, and top harmony if visible
+- overall outfit type, such as casual, smart-casual, business, formal, sporty, streetwear, mixed, or unknown
+- where this outfit would be appropriate
+
+Verdict rules:
+- Use "yes" only if the outfit clearly works well.
+- Use "mostly" if it is acceptable but has 1 noticeable issue.
+- Use "no" if there is a clear mismatch, such as formal pants with a very casual jacket, clashing colors, or pieces that feel like different dress codes.
+
+Outfit type rules:
+- outfitType should describe the overall style.
+- recommendedFor should list 1-3 short, practical contexts, such as daily wear, office, business meeting, dinner, casual weekend, date night, travel, or formal event.
+- If the outfit is mismatched, use outfitType: "mixed".
+- If the image is unclear, use outfitType: "unknown".
+
+Output must stay short:
+- explanation max 2 sentences
+- suggestions max 2 items
+- recommendedFor max 3 items
+- no body comments
+- focus only on clothes, colors, and styling`;
 
 function getFilePathFromUri(uri: string): string {
   return uri.startsWith('file://') ? uri.replace('file://', '') : uri;
@@ -64,12 +76,12 @@ function extractTextFromResponse(payload: unknown): string | null {
     return null;
   }
 
-  const maybeOutputText = (payload as {output_text?: unknown}).output_text;
+  const maybeOutputText = (payload as { output_text?: unknown }).output_text;
   if (typeof maybeOutputText === 'string' && maybeOutputText.trim()) {
     return maybeOutputText.trim();
   }
 
-  const output = (payload as {output?: unknown}).output;
+  const output = (payload as { output?: unknown }).output;
   if (!Array.isArray(output)) {
     return null;
   }
@@ -78,7 +90,7 @@ function extractTextFromResponse(payload: unknown): string | null {
     if (!outputItem || typeof outputItem !== 'object') {
       continue;
     }
-    const content = (outputItem as {content?: unknown}).content;
+    const content = (outputItem as { content?: unknown }).content;
     if (!Array.isArray(content)) {
       continue;
     }
@@ -86,7 +98,7 @@ function extractTextFromResponse(payload: unknown): string | null {
       if (!contentItem || typeof contentItem !== 'object') {
         continue;
       }
-      const text = (contentItem as {text?: unknown}).text;
+      const text = (contentItem as { text?: unknown }).text;
       if (typeof text === 'string' && text.trim()) {
         return text.trim();
       }
@@ -110,10 +122,34 @@ function parseAndValidateAnalysis(text: string): OutfitAnalysisResult {
   }
 
   const obj = parsed as Partial<OutfitAnalysisResult>;
-  const verdictValues: OutfitAnalysisResult['verdict'][] = ['yes', 'mostly', 'no'];
-  const ratingValues: OutfitAnalysisResult['colorMatching'][] = ['good', 'okay', 'poor'];
+  const verdictValues: OutfitAnalysisResult['verdict'][] = [
+    'yes',
+    'mostly',
+    'no',
+  ];
+  const outfitTypeValues: OutfitAnalysisResult['outfitType'][] = [
+    'casual',
+    'smart-casual',
+    'business',
+    'formal',
+    'sporty',
+    'streetwear',
+    'mixed',
+    'unknown',
+  ];
+  const ratingValues: OutfitAnalysisResult['colorMatching'][] = [
+    'good',
+    'okay',
+    'poor',
+  ];
 
   if (!obj.verdict || !verdictValues.includes(obj.verdict)) {
+    throw new Error('INVALID_JSON');
+  }
+  if (!obj.outfitType || !outfitTypeValues.includes(obj.outfitType)) {
+    throw new Error('INVALID_JSON');
+  }
+  if (!Array.isArray(obj.recommendedFor)) {
     throw new Error('INVALID_JSON');
   }
   if (!obj.colorMatching || !ratingValues.includes(obj.colorMatching)) {
@@ -129,8 +165,22 @@ function parseAndValidateAnalysis(text: string): OutfitAnalysisResult {
     throw new Error('INVALID_JSON');
   }
 
+  const recommendedFor = obj.recommendedFor
+    .filter(
+      (item): item is string =>
+        typeof item === 'string' && item.trim().length > 0,
+    )
+    .map(item => item.trim())
+    .slice(0, 3);
+
+  if (recommendedFor.length === 0) {
+    throw new Error('INVALID_JSON');
+  }
+
   return {
     verdict: obj.verdict,
+    outfitType: obj.outfitType,
+    recommendedFor,
     colorMatching: obj.colorMatching,
     styleConsistency: obj.styleConsistency,
     explanation: obj.explanation.trim(),
@@ -159,15 +209,20 @@ function normalizeApiKey(apiKey: string): string {
   return apiKey.trim();
 }
 
-export async function validateOpenAIKey(apiKey: string): Promise<ValidationResult> {
+export async function validateOpenAIKey(
+  apiKey: string,
+): Promise<ValidationResult> {
   const trimmedKey = normalizeApiKey(apiKey);
 
   if (!trimmedKey) {
-    return {valid: false, error: 'Please enter your OpenAI API key.'};
+    return { valid: false, error: 'Please enter your OpenAI API key.' };
   }
 
   if (!trimmedKey.startsWith('sk-')) {
-    return {valid: false, error: 'This does not look like a valid OpenAI key.'};
+    return {
+      valid: false,
+      error: 'This does not look like a valid OpenAI key.',
+    };
   }
 
   try {
@@ -185,19 +240,28 @@ export async function validateOpenAIKey(apiKey: string): Promise<ValidationResul
     });
 
     if (response.ok) {
-      return {valid: true};
+      return { valid: true };
     }
 
     if (response.status === 401) {
-      return {valid: false, error: 'Invalid API key. Please check and try again.'};
+      return {
+        valid: false,
+        error: 'Invalid API key. Please check and try again.',
+      };
     }
 
     if (response.status === 429) {
-      return {valid: false, error: 'Rate limit reached. Please try again shortly.'};
+      return {
+        valid: false,
+        error: 'Rate limit reached. Please try again shortly.',
+      };
     }
 
     if (response.status >= 500) {
-      return {valid: false, error: 'OpenAI service is unavailable right now.'};
+      return {
+        valid: false,
+        error: 'OpenAI service is unavailable right now.',
+      };
     }
 
     return {
@@ -257,9 +321,11 @@ export async function analyzeOutfitImage({
 Return ONLY valid JSON using this exact shape:
 {
   "verdict": "yes" | "mostly" | "no",
+  "outfitType": "casual" | "smart-casual" | "business" | "formal" | "sporty" | "streetwear" | "mixed" | "unknown",
+  "recommendedFor": ["string", "string", "string"],
   "colorMatching": "good" | "okay" | "poor",
   "styleConsistency": "good" | "okay" | "poor",
-  "explanation": "short text max 3 sentences",
+  "explanation": "short text max 2 sentences",
   "suggestions": ["string", "string"]
 }`,
             },
@@ -270,7 +336,7 @@ Return ONLY valid JSON using this exact shape:
           ],
         },
       ],
-      max_output_tokens: 256,
+      max_output_tokens: 320,
     }),
   });
 

@@ -1,5 +1,15 @@
 export type OutfitAnalysisResult = {
   verdict: 'yes' | 'mostly' | 'no';
+  outfitType:
+    | 'casual'
+    | 'smart-casual'
+    | 'business'
+    | 'formal'
+    | 'sporty'
+    | 'streetwear'
+    | 'mixed'
+    | 'unknown';
+  recommendedFor: string[];
   colorMatching: 'good' | 'okay' | 'poor';
   styleConsistency: 'good' | 'okay' | 'poor';
   explanation: string;

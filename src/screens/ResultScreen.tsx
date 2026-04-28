@@ -1,33 +1,62 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
-import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Button from '../components/Button';
-import {RootStackParamList} from '../types/navigation';
+import { RootStackParamList } from '../types/navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Result'>;
 
-function ResultScreen({navigation, route}: Props) {
-  const {analysis} = route.params;
+function formatValue(value: string): string {
+  return value
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function ResultScreen({ navigation, route }: Props) {
+  const { analysis } = route.params;
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Outfit Analysis</Text>
         <Text style={styles.subtitle}>Quick stylist feedback</Text>
 
         <View style={styles.metricBox}>
           <Text style={styles.metricLabel}>Verdict</Text>
-          <Text style={styles.metricValue}>{analysis.verdict}</Text>
+          <Text style={styles.metricValue}>
+            {formatValue(analysis.verdict)}
+          </Text>
+        </View>
+
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>Outfit type</Text>
+          <Text style={styles.metricValue}>
+            {formatValue(analysis.outfitType)}
+          </Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>Recommended for</Text>
+        <View style={styles.chipRow}>
+          {analysis.recommendedFor.map(item => (
+            <View key={item} style={styles.chip}>
+              <Text style={styles.chipText}>{item}</Text>
+            </View>
+          ))}
         </View>
 
         <View style={styles.metricBox}>
           <Text style={styles.metricLabel}>Color matching</Text>
-          <Text style={styles.metricValue}>{analysis.colorMatching}</Text>
+          <Text style={styles.metricValue}>
+            {formatValue(analysis.colorMatching)}
+          </Text>
         </View>
 
         <View style={styles.metricBox}>
           <Text style={styles.metricLabel}>Style consistency</Text>
-          <Text style={styles.metricValue}>{analysis.styleConsistency}</Text>
+          <Text style={styles.metricValue}>
+            {formatValue(analysis.styleConsistency)}
+          </Text>
         </View>
 
         <Text style={styles.sectionTitle}>Explanation</Text>
@@ -45,7 +74,10 @@ function ResultScreen({navigation, route}: Props) {
         )}
 
         <View style={styles.actions}>
-          <Button label="Analyze another outfit" onPress={() => navigation.popToTop()} />
+          <Button
+            label="Analyze another outfit"
+            onPress={() => navigation.popToTop()}
+          />
           <View style={styles.actionGap} />
           <Button
             label="Settings"
@@ -54,15 +86,16 @@ function ResultScreen({navigation, route}: Props) {
           />
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#0B1020',
     paddingHorizontal: 20,
+    paddingVertical: 24,
     justifyContent: 'center',
   },
   card: {
@@ -108,6 +141,25 @@ const styles = StyleSheet.create({
     color: '#F9FAFB',
     fontWeight: '700',
     fontSize: 15,
+  },
+  chipRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    backgroundColor: '#172033',
+    borderWidth: 1,
+    borderColor: '#2A3448',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  chipText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    fontWeight: '600',
   },
   bodyText: {
     marginTop: 8,
